@@ -120,8 +120,20 @@ public class OVRPlayerController : MonoBehaviour
 #endif
 	}
 
+	void Start()
+	{
+		moveDir = transform.forward;
+	}
+
+	float turnCooldown = 0;
+
 	protected virtual void Update()
 	{
+		if(turnCooldown > 0)
+		{
+			turnCooldown-=Time.deltaTime;
+		}
+
 		if (useProfileHeight)
 		{
 			if (InitialPose == null)
@@ -183,17 +195,16 @@ public class OVRPlayerController : MonoBehaviour
 		if (predictedXZ != actualXZ)
 			MoveThrottle += (actualXZ - predictedXZ) / (SimulationRate * Time.deltaTime);
 	}
-
+	Vector3 moveDir = Vector3.zero;
 	public virtual void UpdateMovement()
 	{
 		if (HaltUpdateMovement)
 			return;
 
-		bool moveForward = Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow);
-		bool moveLeft = Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow);
-		bool moveRight = Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow);
-		bool moveBack = Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow);
-
+		bool moveForward = true;
+		bool moveLeft = false;
+		bool moveRight = false;
+		bool moveBack = false;
 		bool dpad_move = false;
 
 		if (OVRGamepadController.GPC_GetButton(OVRGamepadController.Button.Up))
@@ -208,7 +219,7 @@ public class OVRPlayerController : MonoBehaviour
 			dpad_move = true;
 		}
 
-		MoveScale = 1.0f;
+		MoveScale = 2.0f;
 
 		if ( (moveForward && moveLeft) || (moveForward && moveRight) ||
 			 (moveBack && moveLeft)    || (moveBack && moveRight) )
@@ -232,14 +243,28 @@ public class OVRPlayerController : MonoBehaviour
 		ortEuler.z = ortEuler.x = 0f;
 		ort = Quaternion.Euler(ortEuler);
 
+		if(turnCooldown <= 0)
+		{
+			if(Input.GetKey(KeyCode.LeftArrow) || Input.GetKey (KeyCode.A))
+			{
+				moveDir = Quaternion.Euler (0,-90,0)*moveDir;
+				turnCooldown = 0.5f;
+			}
+			if(Input.GetKey(KeyCode.RightArrow) || Input.GetKey (KeyCode.D))
+			{
+				moveDir = Quaternion.Euler (0,90,0)*moveDir;
+				turnCooldown = 0.5f;
+			}
+			if(Input.GetKey(KeyCode.DownArrow) || Input.GetKey (KeyCode.S))
+			{
+				moveDir = Quaternion.Euler (0,180,0)*moveDir;
+				turnCooldown = 0.5f;
+			}
+		}
+
 		if (moveForward)
-			MoveThrottle += ort * (transform.lossyScale.z * moveInfluence * Vector3.forward);
-		if (moveBack)
-			MoveThrottle += ort * (transform.lossyScale.z * moveInfluence * BackAndSideDampen * Vector3.back);
-		if (moveLeft)
-			MoveThrottle += ort * (transform.lossyScale.x * moveInfluence * BackAndSideDampen * Vector3.left);
-		if (moveRight)
-			MoveThrottle += ort * (transform.lossyScale.x * moveInfluence * BackAndSideDampen * Vector3.right);
+			MoveThrottle +=  (moveDir * moveInfluence); //*ort
+
 
 		bool curHatLeft = OVRGamepadController.GPC_GetButton(OVRGamepadController.Button.LeftShoulder);
 
@@ -266,8 +291,7 @@ public class OVRPlayerController : MonoBehaviour
 
 		float rotateInfluence = SimulationRate * Time.deltaTime * RotationAmount * RotationScaleMultiplier;
 
-		if (!SkipMouseRotation)
-			euler.y += Input.GetAxis("Mouse X") * rotateInfluence * 3.25f;
+			//euler.y += Input.GetAxis("Mouse X") * rotateInfluence * 3.25f;
 
 		moveInfluence = SimulationRate * Time.deltaTime * Acceleration * 0.1f * MoveScale * MoveScaleMultiplier;
 
@@ -294,7 +318,7 @@ public class OVRPlayerController : MonoBehaviour
 
 		euler.y += rightAxisX * rotateInfluence;
 
-		transform.rotation = Quaternion.Euler(euler);
+		transform.rotation = Quaternion.Lerp(transform.rotation,Quaternion.LookRotation(moveDir),0.1f);
 	}
 
 	/// <summary>
